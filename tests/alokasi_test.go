@@ -10,7 +10,7 @@ func TestPoolAtWorker(t *testing.T){
     data := []int{1,2,3,4,5,6,7,8,9,10}
     
     ctx := alokasi.New()
-    ctx.PoolAt = alokasi.PoolAtWorker
+    ctx.AllocationType = alokasi.AllocateAsPool
     ctx.WorkerNum = 5
     for _, d := range data{
         ctx.Send(d)
@@ -28,9 +28,15 @@ func TestPoolAtAllocator(t *testing.T){
     data := []int{1,2,3,4,5,6,7,8,9,10}
     
     ctx := alokasi.New()
-    ctx.PoolAt = alokasi.PoolAtAllocator
+    ctx.AllocationType = alokasi.AllocateAsScan
     ctx.WorkerNum = 5
-    ctx.SetData(&data)
+    
+    ikey := 0
+    ctx.OnRequest = func(tx *alokasi.Context)int{
+        d := data[ikey]
+        ikey++
+        return d
+    }
     ctx.Start()  
     ctx.Wait()
     
