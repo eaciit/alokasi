@@ -5,13 +5,43 @@ import (
     "github.com/eaciit/alokasi"
 )
 
-func TestPoolAtWorker(t *testing.T){
+func check(pre string, t *testing.T, e error){
+    if e!=nil{
+        t.Fatalf("%s: %s", pre, e.Error())
+    }
+}
+
+/*
+func TestContext(t *testing.T){
+    mbase := toolkit.M{}
+    c1 := alokasi.NewContext(10)
+    c2 := alokasi.NewContext(20)
+    c1.Items = &mbase
+    c2.Items = &mbase
+    mbase.Set("total",20)
+    c2.Items.Set("count",4)
+    toolkit.Println("C1:", toolkit.JsonString(c1))
+    toolkit.Println("C2:",toolkit.JsonString(c2))
+    if c1.Items.Get("total",0).(int)!=20{
+        t.Fatalf("TestContext. Data is not valid")
+    }
+}
+*/
+
+func TestPool(t *testing.T){
     total := int(0)
     data := []int{1,2,3,4,5,6,7,8,9,10}
     
     ctx := alokasi.New()
     ctx.AllocationType = alokasi.AllocateAsPool
     ctx.WorkerNum = 5
+    ctx.OnReceive = func(ac *alokasi.Context){
+        ac.Lock()
+        total = ac.Allocator.Data.Get("total", 0).(int)
+        total += ac.Data.(int)
+        ac.Allocator.Data.Set("total", total)
+        ac.Unlock()
+    }
     for _, d := range data{
         ctx.Send(d)
     }
@@ -23,7 +53,7 @@ func TestPoolAtWorker(t *testing.T){
     }
 }
 
-func TestPoolAtAllocator(t *testing.T){
+func TestScan(t *testing.T){
     total := int(0)
     data := []int{1,2,3,4,5,6,7,8,9,10}
     
@@ -32,10 +62,24 @@ func TestPoolAtAllocator(t *testing.T){
     ctx.WorkerNum = 5
     
     ikey := 0
-    ctx.OnRequest = func(tx *alokasi.Context)int{
+    ctx.OnRequest = func(ac *alokasi.Context)(bool, interface{}){
+        ac.Lock()
+        ikey = ac.Allocator.Data.GetInt("keyindex")
         d := data[ikey]
         ikey++
-        return d
+        if ikey==len(data){
+            return false, 0
+        }
+        ac.Allocator.Data.Set("keyindex", ikey)
+        ac.Unlock()
+        return true, d
+    }
+    ctx.OnReceive = func(ac *alokasi.Context){
+        ac.Lock()
+        total = ac.Allocator.Data.Get("total", 0).(int)
+        total += ac.Data.(int)
+        ac.Allocator.Data.Set("total", total)
+        ac.Unlock()
     }
     ctx.Start()  
     ctx.Wait()

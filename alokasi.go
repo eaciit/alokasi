@@ -2,7 +2,7 @@ package alokasi
 
 import (
     "sync"
-    //"github.com/eaciit/toolkit"
+    "github.com/eaciit/toolkit"
     //"errors"
 )
 
@@ -16,6 +16,7 @@ const (
 type Allocator struct {
 	AllocationType    AllocationTypeEnum
 	WorkerNum int
+    Data *toolkit.M
     
     OnRequest interface{}
     OnReceive interface{}
@@ -29,11 +30,12 @@ type Allocator struct {
 
 func New() *Allocator{
     a := new(Allocator)
+    a.Data = &toolkit.M{}
     return a
 }
 
 func (a *Allocator) Start(){
-    a.wg = new(sync.WaitGroup)
+    a.initWg()
 }
 
 func (a *Allocator) Send(k interface{}) {
@@ -44,6 +46,13 @@ func (a *Allocator) SendComplete() error {
     return nil
 }
 
+func (a *Allocator) initWg(){
+    if a.wg==nil{
+        a.wg=new(sync.WaitGroup)
+    }
+}
+
 func (a *Allocator) Wait() {
+    a.initWg()
     a.wg.Wait()
 }
