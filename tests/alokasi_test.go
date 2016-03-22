@@ -63,17 +63,18 @@ func TestScan(t *testing.T){
     ctx.WorkerNum = 5
     
     ikey := 0
-    ctx.OnRequest = func(ac *alokasi.Context)(bool, interface{}){
+    ctx.OnRequest = func(ac *alokasi.Context){
+        defer ac.Unlock()
         ac.Lock()
         ikey = ac.Allocator.Data.GetInt("keyindex")
-        d := data[ikey]
-        ikey++
         if ikey==len(data){
-            return false, 0
+            ac.SetError("EOF")
+            return
         }
+        ac.Output = data[ikey]
+        ikey++
         ac.Allocator.Data.Set("keyindex", ikey)
-        ac.Unlock()
-        return true, d
+        return
     }
     ctx.OnReceive = func(ac *alokasi.Context){
         ac.Lock()
