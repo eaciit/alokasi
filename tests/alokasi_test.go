@@ -42,6 +42,7 @@ func TestPool(t *testing.T){
         ac.Allocator.Data.Set("total", total)
         ac.Unlock()
     }
+    ctx.Start()
     for _, d := range data{
         ctx.Send(d)
     }

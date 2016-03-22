@@ -9,6 +9,7 @@ type Context struct{
     Data interface{}
     Allocator *Allocator
     Setting *toolkit.M
+    Error error
     
     sync.Mutex
 }
