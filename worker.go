@@ -1,38 +1,75 @@
 package alokasi
 
 import (
-    "errors"
+	"time"
+
+	//"github.com/eaciit/toolkit"
+	//"strings"
 )
 
-type Worker struct{
-    Allocator *Allocator
-    
-    dataPool []interface{}
+type WorkerStateEnum int
+
+const (
+	WorkerIdle    WorkerStateEnum = 0
+	WorkerRunning                 = 1
+	WorkerStop                    = 2
+)
+
+type Worker struct {
+	ID        int
+	Allocator *Allocator
+	Status    WorkerStateEnum
+
+	dataPool []interface{}
+	chanData chan interface{}
 }
 
-func NewWorker(a *Allocator) *Worker{
-    w := new(Worker)
-    w.Allocator = a
-    return w
-} 
-
-func (w *Worker) Send(d interface{}){
-   w.dataPool = append(w.dataPool, d)
+func NewWorker(a *Allocator) *Worker {
+	w := new(Worker)
+	w.Allocator = a
+	w.Status = WorkerIdle
+    w.chanData = make(chan interface{})
+	return w
 }
 
-func (w *Worker) Run()error{
-    defer w.Allocator.wg.Done()
-    if len(w.dataPool)==0{
-        return errors.New("Worker.Run: EOF")
+func (w *Worker) Start(){
+    if w.Allocator.AllocationType==AllocateAsPool{
+        w.startAsPool()
     }
-    d := w.dataPool[0]
+}
+
+func (w *Worker) startAsPool() {
+	go func() {
+		for {
+			select {
+			case d:= <-w.chanData:
+				w.exec(d)
+                break
+
+			case <-time.After(10 * time.Millisecond):
+				if w.Status == WorkerStop {
+					return
+				}
+			}
+		}
+	}()
+}
+
+func (w *Worker) stop() {
+	w.Status = WorkerStop
+}
+
+
+func (w *Worker) Send(d interface{}) {
+	//toolkit.Printf("Receving %v to datapool of worker %d\n", d, w.ID)
+    w.chanData <- d
+}
+
+func (w *Worker) exec(d interface{}){
+    defer func(){
+        w.Allocator.wg.Done()
+    }()
     ctx := NewContext(w.Allocator, d)
-    w.Allocator.OnReceive(ctx)
-    if ctx.Error!=nil {
-        return errors.New("Worker.Run: " + ctx.Error.Error())
-    }
-    if len(w.dataPool)>1{
-        w.dataPool = w.dataPool[1:]
-    }
-    return nil
+	ctx.Setting.Set("workerid", w.ID)
+  	w.Allocator.OnReceive(ctx)	
 }

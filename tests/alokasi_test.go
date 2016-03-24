@@ -3,6 +3,8 @@ package tests
 import (
     "testing"
     "github.com/eaciit/alokasi"
+    "github.com/eaciit/toolkit"
+    "time"
 )
 
 func check(pre string, t *testing.T, e error){
@@ -28,47 +30,59 @@ func TestContext(t *testing.T){
 }
 */
 
+var workerNum int = 5
+
 func TestPool(t *testing.T){
     total := int(0)
     data := []int{1,2,3,4,5,6,7,8,9,10}
     
-    ctx := alokasi.New()
-    ctx.AllocationType = alokasi.AllocateAsPool
-    ctx.WorkerNum = 5
-    ctx.OnReceive = func(ac *alokasi.Context){
-        ac.Lock()
+    alloc := alokasi.New()
+    alloc.AllocationType = alokasi.AllocateAsPool
+    alloc.WorkerNum = workerNum
+    alloc.OnReceive = func(ac *alokasi.Context){
+        ac.Allocator.Lock()
         total = ac.Allocator.Data.Get("total", 0).(int)
-        total += ac.Data.(int)
+        workerid := ac.Setting.GetInt("workerid")
+        intdata := ac.Data.(int)
+        total += intdata
+        toolkit.Printf("[%d] %s Processing data %d, Total now %d\n", workerid, 
+            time.Now().String(),
+            intdata, total)
         ac.Allocator.Data.Set("total", total)
-        ac.Unlock()
+        ac.Allocator.Unlock()
+        time.Sleep(100 * time.Millisecond)
     }
-    ctx.Start()
+    alloc.Start()
     for _, d := range data{
-        ctx.Send(d)
+        go func(alloc *alokasi.Allocator, d int){
+            alloc.Send(d)
+        }(alloc, d)
     }
-    ctx.SendComplete()   
-    ctx.Wait()
+    //time.Sleep(1*time.Millisecond)
+    alloc.SendComplete()   
+    alloc.Wait()
     
-    if total!=54{
-        t.Fatalf("Total is %d, expected 54", total)
+    if total!=55{
+        t.Fatalf("Total is %d, expected 55", total)
     }
 }
 
 func TestScan(t *testing.T){
+    t.Skip()
     total := int(0)
     data := []int{1,2,3,4,5,6,7,8,9,10}
     
-    ctx := alokasi.New()
-    ctx.AllocationType = alokasi.AllocateAsScan
-    ctx.WorkerNum = 5
+    alloc := alokasi.New()
+    alloc.AllocationType = alokasi.AllocateAsScan
+    alloc.WorkerNum = workerNum
     
     ikey := 0
-    ctx.OnRequest = func(ac *alokasi.Context){
-        defer ac.Unlock()
-        ac.Lock()
+    alloc.OnRequest = func(ac *alokasi.Context){
+        //defer ac.Allocator.Unlock()
+        //ac.Allocator.Lock()
         ikey = ac.Allocator.Data.GetInt("keyindex")
         if ikey==len(data){
-            ac.SetError("EOF")
+            ac.Allocator.SendComplete()
             return
         }
         ac.Output = data[ikey]
@@ -76,17 +90,15 @@ func TestScan(t *testing.T){
         ac.Allocator.Data.Set("keyindex", ikey)
         return
     }
-    ctx.OnReceive = func(ac *alokasi.Context){
-        ac.Lock()
+    alloc.OnReceive = func(ac *alokasi.Context){
         total = ac.Allocator.Data.Get("total", 0).(int)
         total += ac.Data.(int)
         ac.Allocator.Data.Set("total", total)
-        ac.Unlock()
     }
-    ctx.Start()  
-    ctx.Wait()
+    alloc.Start()  
+    alloc.Wait()
     
-    if total!=54{
-        t.Fatalf("Total is %d, expected 54", total)
+    if total!=55{
+        t.Fatalf("Total is %d, expected 55", total)
     }
 }
