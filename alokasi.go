@@ -1,9 +1,10 @@
 package alokasi
 
 import (
-	"github.com/eaciit/toolkit"
 	"sync"
-    "time"
+	"time"
+
+	"github.com/eaciit/toolkit"
 	//"errors"
 )
 
@@ -30,11 +31,11 @@ type Allocator struct {
 	wg                    *sync.WaitGroup
 	sendComplete          bool
 	requestingWorkerIndex int
-    
-    //--- channel
-    cdata chan interface{}
-    csend chan bool
-    cdone chan bool
+
+	//--- channel
+	cdata chan interface{}
+	csend chan bool
+	cdone chan bool
 }
 
 func New() *Allocator {
@@ -45,7 +46,7 @@ func New() *Allocator {
 
 func (a *Allocator) Start() {
 	a.initWg()
-    //a.sendComplete = make(chan bool)
+	//a.sendComplete = make(chan bool)
 	if a.WorkerNum == 0 {
 		a.WorkerNum = 1
 	}
@@ -53,33 +54,37 @@ func (a *Allocator) Start() {
 		w := NewWorker(a)
 		w.ID = i
 		a.workers = append(a.workers, w)
-        w.Start()
+		w.Start()
 	}
-    
-    a.cdata = make(chan interface{})
-    a.csend = make(chan bool)
-    
-    go func(){
-        for{
-            select{
-                case d:=<-a.cdata:
-                    var w *Worker
-                    a.initWg()
-                    a.wg.Add(1)
-                    w = a.requestingWorker()
+
+	a.cdata = make(chan interface{})
+	a.csend = make(chan bool)
+	a.cdone = make(chan bool)
+
+	go func() {
+		for {
+			select {
+			case d := <-a.cdata:
+                go func(){
+                    //a.Lock()
+                    w := a.requestingWorker()
                     a.setNextWorker()
+                    //a.Unlock()
                     w.Send(d)
-                    break;
-                    
-                case <-a.csend:
-                    a.sendComplete = true
-                    break;
-                    
-                case <-time.After(1*time.Millisecond):
-                    break;
-            }      
-        }
-    }()
+                    //a.wg.Done()
+                }()
+
+			case <-a.csend:
+				a.sendComplete = true
+
+			case <-a.cdone:
+				return
+
+			//default:
+				//-- do nothing
+			}
+		}
+	}()
 }
 
 func (a *Allocator) requestingWorker() *Worker {
@@ -99,12 +104,15 @@ func (a *Allocator) setNextWorker() {
 }
 
 func (a *Allocator) Send(k interface{}) {
-	a.cdata <- k
+	//a.initWg()
+	a.wg.Add(1)
+    a.cdata <- k
+    //toolkit.Println("Sending:", k)
 }
 
 func (a *Allocator) SendComplete() error {
 	a.csend <- true
-    return nil
+	return nil
 }
 
 func (a *Allocator) initWg() {
@@ -115,10 +123,11 @@ func (a *Allocator) initWg() {
 
 func (a *Allocator) Wait() {
 	a.initWg()
-    
-    for !a.sendComplete{
-        time.Sleep(1*time.Millisecond)
-    }
-    
+
+	for !a.sendComplete {
+		time.Sleep(1 * time.Second)
+	}
+
 	a.wg.Wait()
+	a.cdone <- true
 }

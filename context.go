@@ -16,11 +16,11 @@ type Context struct{
     sync.Mutex
 }
 
-func NewContext(allocator *Allocator, data interface{})*Context{
+func NewContext(worker *Worker, data interface{})*Context{
     c := new(Context)
     c.Data = data
-    c.Allocator = allocator
-    c.Setting = &toolkit.M{}
+    c.Allocator = worker.Allocator
+    c.Setting = worker.Setting
     return c
 }
 

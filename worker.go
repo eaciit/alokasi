@@ -1,9 +1,8 @@
 package alokasi
 
 import (
-	"time"
-
-	//"github.com/eaciit/toolkit"
+	//"time"
+	"github.com/eaciit/toolkit"
 	//"strings"
 )
 
@@ -20,14 +19,16 @@ type Worker struct {
 	Allocator *Allocator
 	Status    WorkerStateEnum
 
-	dataPool []interface{}
-	chanData chan interface{}
+	//dataPool []interface{}
+	Setting *toolkit.M
+    chanData chan interface{}
 }
 
 func NewWorker(a *Allocator) *Worker {
 	w := new(Worker)
 	w.Allocator = a
 	w.Status = WorkerIdle
+    w.Setting = &toolkit.M{}
     w.chanData = make(chan interface{})
 	return w
 }
@@ -44,13 +45,9 @@ func (w *Worker) startAsPool() {
 			select {
 			case d:= <-w.chanData:
 				w.exec(d)
-                break
 
-			case <-time.After(10 * time.Millisecond):
-				if w.Status == WorkerStop {
-					return
-				}
-			}
+			default:
+            }
 		}
 	}()
 }
@@ -69,7 +66,7 @@ func (w *Worker) exec(d interface{}){
     defer func(){
         w.Allocator.wg.Done()
     }()
-    ctx := NewContext(w.Allocator, d)
-	ctx.Setting.Set("workerid", w.ID)
+    ctx := NewContext(w, d)
+    ctx.Setting.Set("workerid", w.ID)
   	w.Allocator.OnReceive(ctx)	
 }
